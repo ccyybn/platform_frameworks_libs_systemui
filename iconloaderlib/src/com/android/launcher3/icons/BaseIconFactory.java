@@ -118,7 +118,7 @@ public class BaseIconFactory implements AutoCloseable {
     public ShadowGenerator getShadowGenerator() {
         if (mShadowGenerator == null) {
             mShadowGenerator = new ShadowGenerator(mIconBitmapSize);
-            ENABLE_SHADOWS = IconPreferencesKt.shouldTransparentBGIcons(mContext);
+            ENABLE_SHADOWS = IconPreferencesKt.shouldShadowBGIcons(mContext);
         }
         return mShadowGenerator;
     }
