@@ -50,4 +50,9 @@ public class FixedScaleDrawable extends DrawableWrapper {
             mScaleY *= h / w;
         }
     }
+    
+    public void nonScale(){
+        mScaleX = .67f;
+        mScaleY = .67f;
+    }
 }

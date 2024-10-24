@@ -342,32 +342,62 @@ public class BaseIconFactory implements AutoCloseable {
         float scale = 1f;
 
         if (shrinkNonAdaptiveIcons && ATLEAST_OREO) {
-            if (mWrapperIcon == null) {
-                Drawable background = new ColorDrawable(mContext.getColor(R.color.legacy_icon_background));
-                Drawable foreground = new FixedScaleDrawable();
-                mWrapperIcon = new CustomAdaptiveIconDrawable(background, foreground);
+            boolean isSharpSquare = false;
+            boolean isRoundedSquare = false;
+            if (icon instanceof BitmapDrawable bIcon) {
+                Bitmap bitmap = bIcon.getBitmap();
+                int leftTop = bitmap.getPixel(0, 0);
+                int rightTop = bitmap.getPixel(bitmap.getWidth() - 1, 0);
+                int leftBottom = bitmap.getPixel(0, bitmap.getHeight() - 1);
+                int rightBottom = bitmap.getPixel(bitmap.getWidth() - 1, bitmap.getHeight() - 1);
+                isSharpSquare = Color.alpha(leftTop) > 0 && Color.alpha(rightTop) > 0 && Color.alpha(leftBottom) > 0 && Color.alpha(rightBottom) > 0;
+                if (!isSharpSquare) {
+                    int top = bitmap.getPixel(bitmap.getWidth() / 2, 0);
+                    int bottom = bitmap.getPixel(bitmap.getWidth() / 2, bitmap.getHeight() - 1);
+                    int left = bitmap.getPixel(0, bitmap.getHeight() / 2);
+                    int right = bitmap.getPixel(bitmap.getWidth() - 1, bitmap.getHeight() / 2);
+                    isRoundedSquare = Color.alpha(top) > 0 && Color.alpha(bottom) > 0 && Color.alpha(left) > 0 && Color.alpha(right) > 0;
+                }
             }
-            AdaptiveIconDrawable dr = (AdaptiveIconDrawable) mWrapperIcon;
-            dr.setBounds(0, 0, 1, 1);
-            boolean[] outShape = new boolean[1];
-            scale = getNormalizer().getScale(icon, outIconBounds, dr.getIconMask(), outShape);
-            if (!(icon instanceof AdaptiveIconDrawable) && !outShape[0]) {
-                ThemedIconDrawable.ThemeData themeData = null;
-                if (icon instanceof ThemedIconDrawable.ThemedBitmapIcon) {
-                    themeData = ((ThemedIconDrawable.ThemedBitmapIcon) icon).mThemeData;
-                }
-                int wrapperBackgroundColor = IconPreferencesKt.getWrapperBackgroundColor(mContext, icon);
-
-                FixedScaleDrawable fsd = ((FixedScaleDrawable) dr.getForeground());
-                fsd.setDrawable(icon);
-                fsd.setScale(scale);
+            if (isSharpSquare) {
+                Drawable foreground = new FixedScaleDrawable();
+                FixedScaleDrawable background = new FixedScaleDrawable();
+                background.setDrawable(icon);
+                background.nonScale();
+                CustomAdaptiveIconDrawable dr = new CustomAdaptiveIconDrawable(background, foreground);
+                dr.setBounds(0, 0, 1, 1);
                 icon = dr;
-                if (themeData != null) {
-                    icon = themeData.wrapDrawable(icon, ICON_TYPE_DEFAULT);
-                }
                 scale = getNormalizer().getScale(icon, outIconBounds, null, null);
+            } else if (!isRoundedSquare) {
+                if (mWrapperIcon == null) {
+                    Drawable background = new ColorDrawable(mContext.getColor(R.color.legacy_icon_background));
+                    Drawable foreground = new FixedScaleDrawable();
+                    mWrapperIcon = new CustomAdaptiveIconDrawable(background, foreground);
+                }
+                AdaptiveIconDrawable dr = (AdaptiveIconDrawable) mWrapperIcon;
+                dr.setBounds(0, 0, 1, 1);
+                boolean[] outShape = new boolean[1];
+                scale = getNormalizer().getScale(icon, outIconBounds, dr.getIconMask(), outShape);
+                if (!(icon instanceof AdaptiveIconDrawable) && !outShape[0]) {
+                    ThemedIconDrawable.ThemeData themeData = null;
+                    if (icon instanceof ThemedIconDrawable.ThemedBitmapIcon) {
+                        themeData = ((ThemedIconDrawable.ThemedBitmapIcon) icon).mThemeData;
+                    }
+                    int wrapperBackgroundColor = IconPreferencesKt.getWrapperBackgroundColor(mContext, icon);
 
-                ((ColorDrawable) dr.getBackground()).setColor(wrapperBackgroundColor);
+                    FixedScaleDrawable fsd = ((FixedScaleDrawable) dr.getForeground());
+                    fsd.setDrawable(icon);
+                    fsd.setScale(scale);
+                    icon = dr;
+                    if (themeData != null) {
+                        icon = themeData.wrapDrawable(icon, ICON_TYPE_DEFAULT);
+                    }
+                    scale = getNormalizer().getScale(icon, outIconBounds, null, null);
+
+                    ((ColorDrawable) dr.getBackground()).setColor(wrapperBackgroundColor);
+                }
+            } else {
+                scale = getNormalizer().getScale(icon, outIconBounds, null, null);
             }
         } else {
             scale = getNormalizer().getScale(icon, outIconBounds, null, null);
