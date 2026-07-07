@@ -100,9 +100,13 @@ public class BaseIconFactory implements AutoCloseable {
     @Nullable
     private ShadowGenerator mShadowGenerator;
 
-    /** Shadow bitmap used as background for theme icons */
+    /**
+     * Shadow bitmap used as background for theme icons
+     */
     private Bitmap mWhiteShadowLayer;
-    /** Bitmap used for {@link BitmapShader} to mask Adaptive Icons when drawing */
+    /**
+     * Bitmap used for {@link BitmapShader} to mask Adaptive Icons when drawing
+     */
     private Bitmap mShaderBitmap;
 
     private int mWrapperBackgroundColor = DEFAULT_WRAPPER_BACKGROUND;
@@ -110,7 +114,7 @@ public class BaseIconFactory implements AutoCloseable {
     private static int PLACEHOLDER_BACKGROUND_COLOR = Color.rgb(245, 245, 245);
 
     protected BaseIconFactory(Context context, int fullResIconDpi, int iconBitmapSize,
-            boolean unused) {
+                              boolean unused) {
         this(context, fullResIconDpi, iconBitmapSize);
     }
 
@@ -175,8 +179,8 @@ public class BaseIconFactory implements AutoCloseable {
      */
     public BitmapInfo createIconBitmap(String placeholder, int color) {
         AdaptiveIconDrawable drawable = new AdaptiveIconDrawable(
-                new ColorDrawable(PLACEHOLDER_BACKGROUND_COLOR),
-                new CenterTextDrawable(placeholder, color));
+            new ColorDrawable(PLACEHOLDER_BACKGROUND_COLOR),
+            new CenterTextDrawable(placeholder, color));
         Bitmap icon = createIconBitmap(drawable, ICON_VISIBLE_AREA_FACTOR);
         return BitmapInfo.of(icon, color);
     }
@@ -198,7 +202,7 @@ public class BaseIconFactory implements AutoCloseable {
         float inset = getExtraInsetFraction();
         inset = inset / (1 + 2 * inset);
         return new AdaptiveIconDrawable(new ColorDrawable(BLACK),
-                new InsetDrawable(drawable, inset, inset, inset, inset)
+            new InsetDrawable(drawable, inset, inset, inset, inset)
         );
     }
 
@@ -217,12 +221,12 @@ public class BaseIconFactory implements AutoCloseable {
     @TargetApi(Build.VERSION_CODES.TIRAMISU)
     @NonNull
     public BitmapInfo createBadgedIconBitmap(@NonNull Drawable icon,
-            @Nullable IconOptions options) {
+                                             @Nullable IconOptions options) {
         float[] scale = new float[1];
         Drawable tempIcon = icon;
         if (options != null
-                && options.mIsArchived
-                && icon instanceof BitmapDrawable bitmapDrawable) {
+            && options.mIsArchived
+            && icon instanceof BitmapDrawable bitmapDrawable) {
             // b/358123888
             // Pre-archived apps can have BitmapDrawables without insets.
             // Need to convert to Adaptive Icon with insets to avoid cropping.
@@ -230,21 +234,21 @@ public class BaseIconFactory implements AutoCloseable {
         }
         Drawable adaptiveIcon = normalizeAndWrapToAdaptiveIcon(tempIcon, scale);
         Bitmap bitmap = createIconBitmap(adaptiveIcon, scale[0],
-                options == null ? MODE_WITH_SHADOW : options.mGenerationMode);
+            options == null ? MODE_WITH_SHADOW : options.mGenerationMode);
         int color = (options != null && options.mExtractedColor != null)
-                ? options.mExtractedColor : ColorExtractor.findDominantColorByHue(bitmap);
+            ? options.mExtractedColor : ColorExtractor.findDominantColorByHue(bitmap);
         BitmapInfo info = BitmapInfo.of(bitmap, color);
 
         if (adaptiveIcon instanceof Extender extender) {
             info = extender.getExtendedInfo(bitmap, color, this, scale[0]);
         } else if (IconProvider.ATLEAST_T && mThemeController != null && adaptiveIcon instanceof AdaptiveIconDrawable aid) {
             info.setThemedBitmap(
-                    mThemeController.createThemedBitmap(
-                        aid,
-                        info,
-                        this,
-                        options == null ? null : options.mSourceHint
-                    )
+                mThemeController.createThemedBitmap(
+                    aid,
+                    info,
+                    this,
+                    options == null ? null : options.mSourceHint
+                )
             );
         }
         FlagOp flagOp = getBitmapFlagOp(options);
@@ -301,8 +305,8 @@ public class BaseIconFactory implements AutoCloseable {
     public Bitmap getWhiteShadowLayer() {
         if (mWhiteShadowLayer == null) {
             mWhiteShadowLayer = createScaledBitmap(
-                    new AdaptiveIconDrawable(new ColorDrawable(Color.WHITE), null),
-                    MODE_HARDWARE_WITH_SHADOW);
+                new AdaptiveIconDrawable(new ColorDrawable(Color.WHITE), null),
+                MODE_HARDWARE_WITH_SHADOW);
         }
         return mWhiteShadowLayer;
     }
@@ -334,9 +338,9 @@ public class BaseIconFactory implements AutoCloseable {
             }
         };
         if (mShaderBitmap == null || iconWidth != mShaderBitmap.getWidth()
-                || iconHeight != mShaderBitmap.getHeight()) {
+            || iconHeight != mShaderBitmap.getHeight()) {
             mShaderBitmap = BitmapRenderer.createSoftwareBitmap(iconWidth, iconHeight,
-                    shaderRenderer);
+                shaderRenderer);
         } else {
             shaderRenderer.draw(new Canvas(mShaderBitmap));
         }
@@ -357,9 +361,51 @@ public class BaseIconFactory implements AutoCloseable {
         mWrapperBackgroundColor = (Color.alpha(color) < 255) ? DEFAULT_WRAPPER_BACKGROUND : color;
     }
 
+    private enum IconShapeType {
+        SHARP_SQUARE,
+        ROUNDED_SQUARE,
+        OTHER
+    }
+
+    private IconShapeType checkIconShape(@Nullable Drawable icon) {
+        if (icon instanceof BitmapDrawable bIcon) {
+            Bitmap bitmap = bIcon.getBitmap();
+            if (bitmap != null && !bitmap.isRecycled() && bitmap.getWidth() > 0 && bitmap.getHeight() > 0) {
+                int width = bitmap.getWidth();
+                int height = bitmap.getHeight();
+
+                int leftTop = bitmap.getPixel(0, 0);
+                int rightTop = bitmap.getPixel(width - 1, 0);
+                int leftBottom = bitmap.getPixel(0, height - 1);
+                int rightBottom = bitmap.getPixel(width - 1, height - 1);
+
+                boolean isSharpSquare = Color.alpha(leftTop) > 0 && Color.alpha(rightTop) > 0
+                    && Color.alpha(leftBottom) > 0 && Color.alpha(rightBottom) > 0;
+
+                if (isSharpSquare) {
+                    return IconShapeType.SHARP_SQUARE;
+                }
+
+                int top = bitmap.getPixel(width / 2, 0);
+                int bottom = bitmap.getPixel(width / 2, height - 1);
+                int left = bitmap.getPixel(0, height / 2);
+                int right = bitmap.getPixel(width - 1, height / 2);
+
+                boolean isRoundedSquare = Color.alpha(top) > 0 && Color.alpha(bottom) > 0
+                    && Color.alpha(left) > 0 && Color.alpha(right) > 0;
+
+                if (isRoundedSquare) {
+                    return IconShapeType.ROUNDED_SQUARE;
+                }
+            }
+        }
+        return IconShapeType.OTHER;
+    }
+
+
     @Nullable
     protected Drawable normalizeAndWrapToAdaptiveIcon(
-            @Nullable Drawable icon, @NonNull final float[] outScale) {
+        @Nullable Drawable icon, @NonNull final float[] outScale) {
         if (icon == null) {
             return null;
         }
@@ -371,10 +417,29 @@ public class BaseIconFactory implements AutoCloseable {
         float scale;
 
         if (shrinkNonAdaptiveIcons && !(icon instanceof AdaptiveIconDrawable)) {
+            IconShapeType shapeType = checkIconShape(icon);
+
+            if (shapeType == IconShapeType.SHARP_SQUARE) {
+                FixedScaleDrawable foreground = new FixedScaleDrawable();
+                FixedScaleDrawable background = new FixedScaleDrawable();
+                background.setDrawable(icon);
+                background.nonScale();
+
+                WrappedAdaptiveIcon wrapper = new WrappedAdaptiveIcon(background, foreground);
+                scale = new IconNormalizer(mIconBitmapSize).getScale(wrapper);
+                outScale[0] = scale;
+                return wrapper;
+            }
+
+            if (shapeType == IconShapeType.ROUNDED_SQUARE) {
+                scale = new IconNormalizer(mIconBitmapSize).getScale(icon);
+                outScale[0] = scale;
+                return icon;
+            }
+
             scale = new IconNormalizer(mIconBitmapSize).getScale(icon);
 
-            int wrapperBackgroundColor = IconPreferencesKt.getWrapperBackgroundColor(mContext,
-                icon);
+            int wrapperBackgroundColor = IconPreferencesKt.getWrapperBackgroundColor(mContext, icon);
 
             FixedScaleDrawable foreground = new FixedScaleDrawable();
             foreground.setDrawable(icon);
@@ -431,13 +496,38 @@ public class BaseIconFactory implements AutoCloseable {
         if (icon instanceof AdaptiveIconDrawable aid) {
             return aid;
         } else {
+            IconShapeType shapeType = checkIconShape(icon);
+
+            if (shapeType == IconShapeType.SHARP_SQUARE) {
+                FixedScaleDrawable foreground = new FixedScaleDrawable();
+                FixedScaleDrawable background = new FixedScaleDrawable();
+                background.setDrawable(icon);
+                background.nonScale();
+
+                CustomAdaptiveIconDrawable dr = new CustomAdaptiveIconDrawable(background, foreground);
+                dr.setBounds(0, 0, 1, 1);
+                return dr;
+            }
+
+            if (shapeType == IconShapeType.ROUNDED_SQUARE) {
+                float scale = new IconNormalizer(mIconBitmapSize).getScale(icon);
+                FixedScaleDrawable foreground = new FixedScaleDrawable();
+                FixedScaleDrawable background = new FixedScaleDrawable();
+                background.setDrawable(icon);
+                background.setScale(scale);
+
+                WrappedAdaptiveIcon dr = new WrappedAdaptiveIcon(background, foreground);
+                dr.setBounds(0, 0, 1, 1);
+                return dr;
+            }
+
             int wrapperBackgroundColor = IconPreferencesKt.getWrapperBackgroundColor(mContext, icon);
 
             float scale = new IconNormalizer(mIconBitmapSize).getScale(icon);
             CustomAdaptiveIconDrawable dr = new CustomAdaptiveIconDrawable(
-                    new ColorDrawable(wrapperBackgroundColor), createScaledDrawable(icon, scale * LEGACY_ICON_SCALE));
+                new ColorDrawable(wrapperBackgroundColor), createScaledDrawable(icon, scale * LEGACY_ICON_SCALE));
             dr.setBounds(0, 0, 1, 1);
-            
+
             return dr;
         }
     }
@@ -449,7 +539,7 @@ public class BaseIconFactory implements AutoCloseable {
 
     @NonNull
     public Bitmap createIconBitmap(@Nullable final Drawable icon, final float scale,
-            @BitmapGenerationMode int bitmapGenerationMode) {
+                                   @BitmapGenerationMode int bitmapGenerationMode) {
         final int size = mIconBitmapSize;
         final Bitmap bitmap;
         switch (bitmapGenerationMode) {
@@ -459,7 +549,7 @@ public class BaseIconFactory implements AutoCloseable {
             case MODE_HARDWARE:
             case MODE_HARDWARE_WITH_SHADOW: {
                 return BitmapRenderer.createHardwareBitmap(size, size, canvas ->
-                        drawIconBitmap(canvas, icon, scale, bitmapGenerationMode, null));
+                    drawIconBitmap(canvas, icon, scale, bitmapGenerationMode, null));
             }
             case MODE_WITH_SHADOW:
             default:
@@ -476,15 +566,15 @@ public class BaseIconFactory implements AutoCloseable {
     }
 
     private void drawIconBitmap(@NonNull Canvas canvas, @Nullable Drawable icon,
-            final float scale, @BitmapGenerationMode int bitmapGenerationMode,
-            @Nullable Bitmap targetBitmap) {
+                                final float scale, @BitmapGenerationMode int bitmapGenerationMode,
+                                @Nullable Bitmap targetBitmap) {
         final int size = mIconBitmapSize;
         mOldBounds.set(icon.getBounds());
         if (icon instanceof AdaptiveIconDrawable aid) {
             // We are ignoring KEY_SHADOW_DISTANCE because regular icons ignore this at the
             // moment b/298203449
             int offset = Math.max((int) Math.ceil(BLUR_FACTOR * size),
-                    Math.round(size * (1 - scale) / 2));
+                Math.round(size * (1 - scale) / 2));
             // b/211896569: AdaptiveIconDrawable do not work properly for non top-left bounds
             int newBounds = size - offset * 2;
             icon.setBounds(0, 0, newBounds, newBounds);
@@ -494,7 +584,7 @@ public class BaseIconFactory implements AutoCloseable {
             // Lawnchair: skip shadow when transparent backgrounds are enabled.
             boolean skipShadow = IconPreferencesKt.shouldTransparentBGIcons(mContext);
             if (!skipShadow && (bitmapGenerationMode == MODE_WITH_SHADOW
-                    || bitmapGenerationMode == MODE_HARDWARE_WITH_SHADOW)) {
+                || bitmapGenerationMode == MODE_HARDWARE_WITH_SHADOW)) {
                 getShadowGenerator().addPathShadow(shapePath, canvas);
             }
 
@@ -537,10 +627,10 @@ public class BaseIconFactory implements AutoCloseable {
             canvas.restore();
 
             if (bitmapGenerationMode == MODE_WITH_SHADOW && targetBitmap != null
-                    // Lawnchair: skip shadow on non-adaptive icons (e.g. icon pack icons)
-                    // when transparent backgrounds are enabled, as drawShadow creates
-                    // a white/gray glow on transparent/glass icons.
-                    && !IconPreferencesKt.shouldTransparentBGIcons(mContext)) {
+                // Lawnchair: skip shadow on non-adaptive icons (e.g. icon pack icons)
+                // when transparent backgrounds are enabled, as drawShadow creates
+                // a white/gray glow on transparent/glass icons.
+                && !IconPreferencesKt.shouldTransparentBGIcons(mContext)) {
                 // Shadow extraction only works in software mode
                 getShadowGenerator().drawShadow(targetBitmap, canvas);
 
@@ -563,9 +653,9 @@ public class BaseIconFactory implements AutoCloseable {
      * @param shapePath path to clip icon with for shapes
      */
     protected void drawAdaptiveIcon(
-            @NonNull Canvas canvas,
-            @NonNull AdaptiveIconDrawable drawable,
-            @NonNull Path shapePath
+        @NonNull Canvas canvas,
+        @NonNull AdaptiveIconDrawable drawable,
+        @NonNull Path shapePath
     ) {
         Drawable background = drawable.getBackground();
         Drawable foreground = drawable.getForeground();
@@ -737,9 +827,9 @@ public class BaseIconFactory implements AutoCloseable {
             mTextPaint.setTextSize(bounds.height() / 3f);
             mTextPaint.getTextBounds(mText, 0, mText.length(), mTextBounds);
             canvas.drawText(mText,
-                    bounds.exactCenterX() - mTextBounds.exactCenterX(),
-                    bounds.exactCenterY() - mTextBounds.exactCenterY(),
-                    mTextPaint);
+                bounds.exactCenterX() - mTextBounds.exactCenterX(),
+                bounds.exactCenterY() - mTextBounds.exactCenterY(),
+                mTextPaint);
         }
     }
 
